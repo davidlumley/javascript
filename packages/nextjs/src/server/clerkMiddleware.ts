@@ -6,6 +6,7 @@ import type {
   RequestState,
 } from '@clerk/backend/internal';
 import { AuthStatus, constants, createClerkRequest, createRedirect } from '@clerk/backend/internal';
+import { fetchEphemeralKeys } from '@clerk/shared';
 import { eventMethodCalled } from '@clerk/shared/telemetry';
 import type { NextMiddleware } from 'next/server';
 import { NextResponse } from 'next/server';
@@ -71,15 +72,16 @@ interface ClerkMiddleware {
 export const clerkMiddleware: ClerkMiddleware = (...args: unknown[]): any => {
   const [request, event] = parseRequestAndEvent(args);
   const [handler, params] = parseHandlerAndOptions(args);
-  const publishableKey = assertKey(params.publishableKey || PUBLISHABLE_KEY, () =>
-    errorThrower.throwMissingPublishableKeyError(),
-  );
-  const secretKey = assertKey(params.secretKey || SECRET_KEY, () => errorThrower.throwMissingSecretKeyError());
+  const publishableKey: string | undefined = params.publishableKey || PUBLISHABLE_KEY;
+  const secretKey: string | undefined = params.secretKey || SECRET_KEY;
+
   const signInUrl = params.signInUrl || SIGN_IN_URL;
   const signUpUrl = params.signUpUrl || SIGN_UP_URL;
+  const ephemeral = false;
 
   const options = {
     ...params,
+    ephemeral,
     publishableKey,
     secretKey,
     signInUrl,
@@ -95,6 +97,16 @@ export const clerkMiddleware: ClerkMiddleware = (...args: unknown[]): any => {
   );
 
   const nextMiddleware: NextMiddleware = async (request, event) => {
+    if (!options.publishableKey || !options.secretKey) {
+      const keys = await fetchEphemeralKeys();
+      options.publishableKey = keys.publishableKey;
+      options.secretKey = keys.secretKey;
+      options.ephemeral = true;
+    }
+
+    assertKey(options.publishableKey || '', () => errorThrower.throwMissingPublishableKeyError());
+    assertKey(options.secretKey || '', () => errorThrower.throwMissingSecretKeyError());
+
     const clerkRequest = createClerkRequest(request);
 
     const requestState = await clerkClient.authenticateRequest(
@@ -115,11 +127,16 @@ export const clerkMiddleware: ClerkMiddleware = (...args: unknown[]): any => {
     const protect = createMiddlewareProtect(clerkRequest, authObject, redirectToSignIn);
     const authObjWithMethods: ClerkMiddlewareAuthObject = Object.assign(authObject, { protect, redirectToSignIn });
 
-    let handlerResult: Response = NextResponse.next();
+    let handlerResult: NextResponse = NextResponse.next();
     try {
-      handlerResult = (await handler?.(() => authObjWithMethods, request, event)) || handlerResult;
+      handlerResult = ((await handler?.(() => authObjWithMethods, request, event)) as NextResponse) || handlerResult;
     } catch (e: any) {
-      handlerResult = handleControlFlowErrors(e, clerkRequest, requestState);
+      handlerResult = handleControlFlowErrors(e, clerkRequest, requestState) as NextResponse;
+    }
+
+    if (options.ephemeral) {
+      handlerResult.cookies.set(constants.Cookies.EphemeralMode, 'true');
+      handlerResult.cookies.set(constants.Cookies.PublishableKey, options.publishableKey || '');
     }
 
     if (isRedirect(handlerResult)) {

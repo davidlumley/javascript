@@ -18,6 +18,8 @@ const Cookies = {
   ClientUat: '__client_uat',
   Handshake: '__clerk_handshake',
   DevBrowser: '__clerk_db_jwt',
+  EphemeralMode: '__clerk_ephemeral_mode',
+  PublishableKey: '__clerk_publishable_key',
 } as const;
 
 const QueryParameters = {
