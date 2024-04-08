@@ -109,3 +109,25 @@ export function isDevelopmentFromSecretKey(apiKey: string): boolean {
 export function isProductionFromSecretKey(apiKey: string): boolean {
   return apiKey.startsWith('live_') || apiKey.startsWith('sk_live_');
 }
+
+type EphemeralKeys = {
+  publishableKey: string;
+  secretKey: string;
+};
+
+// TODO: Use a real API endpoint
+export const fetchEphemeralKeys = (() => {
+  let keys: EphemeralKeys | null = null;
+
+  return async () => {
+    if (!keys) {
+      const response = await fetch('http://localhost:8787');
+      const data = await response.json();
+      keys = {
+        publishableKey: data.publishable_key,
+        secretKey: data.secret_key,
+      };
+    }
+    return keys;
+  };
+})();
