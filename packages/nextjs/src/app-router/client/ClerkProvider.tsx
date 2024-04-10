@@ -1,7 +1,9 @@
 'use client';
+import { constants } from '@clerk/backend/internal';
 import { ClerkProvider as ReactClerkProvider } from '@clerk/clerk-react';
+import { createCookieHandler } from '@clerk/shared/cookie';
 import { useRouter } from 'next/navigation';
-import React, { useEffect, useTransition } from 'react';
+import React, { useEffect, useState, useTransition } from 'react';
 
 import { ClerkNextOptionsProvider } from '../../client-boundary/NextOptionsContext';
 import { useSafeLayoutEffect } from '../../client-boundary/useSafeLayoutEffect';
@@ -17,11 +19,15 @@ declare global {
   }
 }
 
+const cookieStore = createCookieHandler(constants.Cookies.PublishableKey);
+
 export const ClientClerkProvider = (props: NextClerkProviderProps) => {
   const { __unstable_invokeMiddlewareOnAuthStateChange = true, children } = props;
   const router = useRouter();
   const navigate = useAwaitableNavigate();
   const [isPending, startTransition] = useTransition();
+  const [ephemeralPublishableKey, setEphemeralPublishableKey] = useState<string | undefined>();
+  const publishableKey = props.publishableKey || ephemeralPublishableKey;
 
   useEffect(() => {
     if (!isPending) {
@@ -30,6 +36,11 @@ export const ClientClerkProvider = (props: NextClerkProviderProps) => {
   }, [isPending]);
 
   useSafeLayoutEffect(() => {
+    if (!publishableKey) {
+      const key = cookieStore.get();
+      if (key) setEphemeralPublishableKey(key);
+    }
+
     window.__unstable__onBeforeSetActive = () => {
       /**
        * We need to invalidate the cache in case the user is navigating to a page that
@@ -67,6 +78,7 @@ export const ClientClerkProvider = (props: NextClerkProviderProps) => {
 
   const mergedProps = mergeNextClerkPropsWithEnv({
     ...props,
+    publishableKey,
     routerPush: navigate,
     routerReplace: to => router.replace(to),
   });
