@@ -121,7 +121,7 @@ export const fetchEphemeralKeys = (() => {
 
   return async () => {
     if (!keys) {
-      const response = await fetch('http://localhost:8787');
+      const response = await fetch('http://localhost:8787/auth.json');
       const data = await response.json();
       keys = {
         publishableKey: data.publishable_key,
