@@ -1,3 +1,4 @@
+import { fetchEphemeralKeys } from '@clerk/shared';
 import { ClerkAPIResponseError, parseError } from '@clerk/shared/error';
 import type { ClerkAPIError, ClerkAPIErrorJSON } from '@clerk/types';
 import snakecaseKeys from 'snakecase-keys';
@@ -56,6 +57,11 @@ type BuildRequestOptions = {
 };
 export function buildRequest(options: BuildRequestOptions) {
   const requestFn = async <T>(requestOptions: ClerkBackendApiRequestOptions): Promise<ClerkBackendApiResponse<T>> => {
+    if (!options.secretKey) {
+      const keys = await fetchEphemeralKeys();
+      options.secretKey = keys.secretKey;
+    }
+
     const { secretKey, apiUrl = API_URL, apiVersion = API_VERSION, userAgent = USER_AGENT } = options;
     const { path, method, queryParams, headerParams, bodyParams, formData } = requestOptions;
 
