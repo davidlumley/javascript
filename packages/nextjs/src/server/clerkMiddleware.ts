@@ -72,8 +72,8 @@ interface ClerkMiddleware {
 export const clerkMiddleware: ClerkMiddleware = (...args: unknown[]): any => {
   const [request, event] = parseRequestAndEvent(args);
   const [handler, params] = parseHandlerAndOptions(args);
-  const publishableKey: string | undefined = params.publishableKey || PUBLISHABLE_KEY;
-  const secretKey: string | undefined = params.secretKey || SECRET_KEY;
+  const publishableKey: string = params.publishableKey || PUBLISHABLE_KEY;
+  const secretKey: string = params.secretKey || SECRET_KEY;
 
   const signInUrl = params.signInUrl || SIGN_IN_URL;
   const signUpUrl = params.signUpUrl || SIGN_UP_URL;
@@ -104,8 +104,8 @@ export const clerkMiddleware: ClerkMiddleware = (...args: unknown[]): any => {
       options.ephemeral = true;
     }
 
-    assertKey(options.publishableKey || '', () => errorThrower.throwMissingPublishableKeyError());
-    assertKey(options.secretKey || '', () => errorThrower.throwMissingSecretKeyError());
+    assertKey(options.publishableKey, () => errorThrower.throwMissingPublishableKeyError());
+    assertKey(options.secretKey, () => errorThrower.throwMissingSecretKeyError());
 
     const clerkRequest = createClerkRequest(request);
 
