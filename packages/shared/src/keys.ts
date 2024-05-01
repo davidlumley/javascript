@@ -1,6 +1,6 @@
 import type { PublishableKey } from '@clerk/types';
 
-import { DEV_OR_STAGING_SUFFIXES, LEGACY_DEV_INSTANCE_SUFFIXES } from './constants';
+import { APP_URL_HEADER, DEV_OR_STAGING_SUFFIXES, EPHEMERAL_KEY_URL, LEGACY_DEV_INSTANCE_SUFFIXES } from './constants';
 import { isomorphicAtob } from './isomorphicAtob';
 import { isomorphicBtoa } from './isomorphicBtoa';
 
@@ -119,9 +119,14 @@ type EphemeralKeys = {
 export const fetchEphemeralKeys = (() => {
   let keys: EphemeralKeys | null = null;
 
-  return async () => {
+  return async ({ appUrl }: { appUrl: string }) => {
     if (!keys) {
-      const response = await fetch('http://localhost:8787/auth.json');
+      const response = await fetch(EPHEMERAL_KEY_URL, {
+        headers: {
+          'Content-Type': 'application/json',
+          [APP_URL_HEADER]: appUrl,
+        },
+      });
       const data = await response.json();
       keys = {
         publishableKey: data.publishable_key,

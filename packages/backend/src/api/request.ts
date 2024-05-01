@@ -58,7 +58,8 @@ type BuildRequestOptions = {
 export function buildRequest(options: BuildRequestOptions) {
   const requestFn = async <T>(requestOptions: ClerkBackendApiRequestOptions): Promise<ClerkBackendApiResponse<T>> => {
     if (!options.secretKey) {
-      const keys = await fetchEphemeralKeys();
+      // Need to figure this out
+      const keys = await fetchEphemeralKeys({ appUrl: 'buildRequest' });
       options.secretKey = keys.secretKey;
     }
 

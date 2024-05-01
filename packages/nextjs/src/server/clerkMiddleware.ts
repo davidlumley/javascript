@@ -98,7 +98,7 @@ export const clerkMiddleware: ClerkMiddleware = (...args: unknown[]): any => {
 
   const nextMiddleware: NextMiddleware = async (request, event) => {
     if (!options.publishableKey || !options.secretKey) {
-      const keys = await fetchEphemeralKeys();
+      const keys = await fetchEphemeralKeys({ appUrl: request.url });
       options.publishableKey = keys.publishableKey;
       options.secretKey = keys.secretKey;
       options.ephemeral = true;
