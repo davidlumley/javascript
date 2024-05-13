@@ -39,6 +39,11 @@ export function isClerkAPIResponseError(err: any): err is ClerkAPIResponseError 
   return 'clerkError' in err;
 }
 
+export function isClerkKeyError(err: any) {
+  const message = String(err);
+  return message.includes('Missing publishableKey') || message.includes('Missing secretKey');
+}
+
 /**
  * Checks if the provided error object is an instance of ClerkRuntimeError.
  *
