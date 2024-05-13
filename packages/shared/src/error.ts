@@ -39,9 +39,14 @@ export function isClerkAPIResponseError(err: any): err is ClerkAPIResponseError 
   return 'clerkError' in err;
 }
 
+// TODO: Find a better way to error when missing keys
 export function isClerkKeyError(err: any) {
   const message = String(err);
-  return message.includes('Missing publishableKey') || message.includes('Missing secretKey');
+  return (
+    message.includes('Missing publishableKey') ||
+    message.includes('Missing secretKey') ||
+    message.includes("Clerk can't detect usage of clerkMiddleware()")
+  );
 }
 
 /**

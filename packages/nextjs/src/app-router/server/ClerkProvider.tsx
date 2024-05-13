@@ -26,7 +26,7 @@ const loadKeysFromConfig = () => {
   return null;
 };
 
-const writeKeysToConfig = (keys: EphemeralKeys) => {
+const writeEphemeralKeysToConfig = (keys: EphemeralKeys) => {
   const config_dir = xdg.config();
   const config_path = path.join(config_dir, 'clerk', 'config.json');
 
@@ -44,7 +44,7 @@ const writeKeysToConfig = (keys: EphemeralKeys) => {
 };
 
 // TODO: Replace with call to fetch keys, copy paste your own for now
-const fetchKeys = async () => {
+const fetchEphemeralKeys = async () => {
   return {
     publishableKey: 'pk_test_',
     secretKey: 'sk_test_',
@@ -52,14 +52,17 @@ const fetchKeys = async () => {
   };
 };
 
-const getKeys = async () => {
+const getEphemeralKeys = async () => {
   const keys = loadKeysFromConfig();
-  if (keys) return keys;
+  if (keys) {
+    // TODO: Figure out how to pass these keys to the middleware, maybe a redirect if there's no ephemeral publishable key set as a cookie yet?
+    return keys;
+  }
 
-  const newKeys = await fetchKeys();
+  const newKeys = await fetchEphemeralKeys();
 
-  writeKeysToConfig(newKeys);
-  // setEphemeralKeys(newKeys);
+  writeEphemeralKeysToConfig(newKeys);
+  // TODO: Figure out how to pass these keys to the middleware, maybe a redirect if there's no ephemeral publishable key set as a cookie yet?
 
   return newKeys;
 };
@@ -70,7 +73,8 @@ export async function ClerkProvider(
   const { children, ...rest } = props;
   const state = initialState()?.__clerk_ssr_state as InitialState;
 
-  const keys = await getKeys();
+  // TODO: Verify keys are not already set in initialState, or in the cookie
+  const keys = await getEphemeralKeys();
   return (
     <ClientClerkProvider
       {...mergeNextClerkPropsWithEnv(rest)}

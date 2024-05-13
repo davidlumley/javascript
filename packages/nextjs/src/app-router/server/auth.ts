@@ -1,5 +1,6 @@
 import type { AuthObject, RedirectFun } from '@clerk/backend/internal';
-import { createClerkRequest, createRedirect } from '@clerk/backend/internal';
+import { createClerkRequest, createRedirect, signedOutAuthObject } from '@clerk/backend/internal';
+import { isClerkKeyError } from '@clerk/shared';
 import { notFound, redirect } from 'next/navigation';
 
 import { buildClerkProps } from '../../server/buildClerkProps';
@@ -13,32 +14,39 @@ import { buildRequestLike } from './utils';
 
 type Auth = AuthObject & { protect: AuthProtect; redirectToSignIn: RedirectFun<ReturnType<typeof redirect>> };
 
-export const auth = (): Auth => {
-  const request = buildRequestLike();
-  const authObject = createGetAuth({
-    debugLoggerName: 'auth()',
-    noAuthStatusMessage: authAuthHeaderMissing(),
-  })(request);
+export const auth = (): Auth | Record<any, any> => {
+  try {
+    const request = buildRequestLike();
+    let authObject: AuthObject = signedOutAuthObject();
 
-  const clerkUrl = getAuthKeyFromRequest(request, 'ClerkUrl');
+    authObject = createGetAuth({
+      debugLoggerName: 'auth()',
+      noAuthStatusMessage: authAuthHeaderMissing(),
+    })(request);
 
-  const redirectToSignIn: RedirectFun<never> = (opts = {}) => {
-    return createRedirect({
-      redirectAdapter: redirect,
-      baseUrl: createClerkRequest(request).clerkUrl.toString(),
-      // TODO: Support runtime-value configuration of these options
-      // via setting and reading headers from clerkMiddleware
-      publishableKey: PUBLISHABLE_KEY,
-      signInUrl: SIGN_IN_URL,
-      signUpUrl: SIGN_UP_URL,
-    }).redirectToSignIn({
-      returnBackUrl: opts.returnBackUrl === null ? '' : opts.returnBackUrl || clerkUrl?.toString(),
-    });
-  };
+    const clerkUrl = getAuthKeyFromRequest(request, 'ClerkUrl');
 
-  const protect = createProtect({ request, authObject, redirectToSignIn, notFound, redirect });
+    const redirectToSignIn: RedirectFun<never> = (opts = {}) => {
+      return createRedirect({
+        redirectAdapter: redirect,
+        baseUrl: createClerkRequest(request).clerkUrl.toString(),
+        // TODO: Support runtime-value configuration of these options
+        // via setting and reading headers from clerkMiddleware
+        publishableKey: PUBLISHABLE_KEY,
+        signInUrl: SIGN_IN_URL,
+        signUpUrl: SIGN_UP_URL,
+      }).redirectToSignIn({
+        returnBackUrl: opts.returnBackUrl === null ? '' : opts.returnBackUrl || clerkUrl?.toString(),
+      });
+    };
 
-  return Object.assign(authObject, { protect, redirectToSignIn });
+    const protect = createProtect({ request, authObject, redirectToSignIn, notFound, redirect });
+
+    return Object.assign(authObject, { protect, redirectToSignIn });
+  } catch (e: any) {
+    if (!!process && process.env.NODE_ENV === 'development' && isClerkKeyError(e)) return initialState();
+    throw e;
+  }
 };
 
 export const initialState = () => {

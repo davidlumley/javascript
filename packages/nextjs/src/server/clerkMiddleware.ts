@@ -71,37 +71,49 @@ interface ClerkMiddleware {
 }
 
 export const clerkMiddleware: ClerkMiddleware = withLogger('clerkMiddleware', logger => (...args: unknown[]): any => {
-  try {
-    const [request, event] = parseRequestAndEvent(args);
-    const [handler, params] = parseHandlerAndOptions(args);
-    if (params.debug) {
-      logger.enable();
-    }
+  const [request, event] = parseRequestAndEvent(args);
+  const [handler, params] = parseHandlerAndOptions(args);
+  if (params.debug) {
+    logger.enable();
+  }
 
-    const publishableKey = assertKey(params.publishableKey || PUBLISHABLE_KEY, () =>
-      errorThrower.throwMissingPublishableKeyError(),
-    );
-    const secretKey = assertKey(params.secretKey || SECRET_KEY, () => errorThrower.throwMissingSecretKeyError());
-    const signInUrl = params.signInUrl || SIGN_IN_URL;
-    const signUpUrl = params.signUpUrl || SIGN_UP_URL;
+  const signInUrl = params.signInUrl || SIGN_IN_URL;
+  const signUpUrl = params.signUpUrl || SIGN_UP_URL;
 
-    const options = {
-      ...params,
-      publishableKey,
-      secretKey,
-      signInUrl,
-      signUpUrl,
-    };
+  clerkClient.telemetry.record(
+    eventMethodCalled('clerkMiddleware', {
+      handler: Boolean(handler),
+      satellite: Boolean(params.isSatellite),
+      proxy: Boolean(params.proxyUrl),
+    }),
+  );
 
-    clerkClient.telemetry.record(
-      eventMethodCalled('clerkMiddleware', {
-        handler: Boolean(handler),
-        satellite: Boolean(options.isSatellite),
-        proxy: Boolean(options.proxyUrl),
-      }),
-    );
+  let ephemeralPublishableKey: string | undefined;
+  let ephemeralSecretKey: string | undefined;
 
-    const nextMiddleware: NextMiddleware = async (request, event) => {
+  // const setEphemeralKeys = (keys: EphemeralKeys) => {
+  //   ephemeralPublishableKey = keys.publishableKey;
+  //   ephemeralSecretKey = keys.secretKey;
+  // };
+
+  const nextMiddleware: NextMiddleware = async (request, event) => {
+    try {
+      // TODO: Check request for ephemeral keys if they exist, if they do set them
+      const publishableKey = assertKey(params.publishableKey || ephemeralPublishableKey || PUBLISHABLE_KEY, () =>
+        errorThrower.throwMissingPublishableKeyError(),
+      );
+      const secretKey = assertKey(params.secretKey || ephemeralSecretKey || SECRET_KEY, () =>
+        errorThrower.throwMissingSecretKeyError(),
+      );
+
+      const options = {
+        ...params,
+        publishableKey,
+        secretKey,
+        signInUrl,
+        signUpUrl,
+      };
+
       const clerkRequest = createClerkRequest(request);
       logger.debug('options', options);
       logger.debug('url', () => clerkRequest.toJSON());
@@ -131,11 +143,17 @@ export const clerkMiddleware: ClerkMiddleware = withLogger('clerkMiddleware', lo
       const protect = createMiddlewareProtect(clerkRequest, authObject, redirectToSignIn);
       const authObjWithMethods: ClerkMiddlewareAuthObject = Object.assign(authObject, { protect, redirectToSignIn });
 
-      let handlerResult: Response = NextResponse.next();
+      let handlerResult: NextResponse = NextResponse.next();
       try {
-        handlerResult = (await handler?.(() => authObjWithMethods, request, event)) || handlerResult;
+        handlerResult = ((await handler?.(() => authObjWithMethods, request, event)) as NextResponse) || handlerResult;
       } catch (e: any) {
-        handlerResult = handleControlFlowErrors(e, clerkRequest, requestState);
+        handlerResult = handleControlFlowErrors(e, clerkRequest, requestState) as NextResponse;
+      }
+
+      if (ephemeralPublishableKey) {
+        handlerResult.cookies.set(constants.Cookies.EphemeralPublishableKey, options.publishableKey || '');
+      } else {
+        handlerResult.cookies.delete(constants.Cookies.EphemeralPublishableKey);
       }
 
       if (isRedirect(handlerResult)) {
@@ -158,25 +176,25 @@ export const clerkMiddleware: ClerkMiddleware = withLogger('clerkMiddleware', lo
       }
 
       return handlerResult;
-    };
-
-    // If we have a request and event, we're being called as a middleware directly
-    // eg, export default clerkMiddleware;
-    if (request && event) {
-      return nextMiddleware(request, event);
+    } catch (e: any) {
+      // If we're in development
+      if (!!process && process.env.NODE_ENV === 'development') {
+        // And this is a clerkKeyError, return a no-op to allow the ClerkProvider to fetch the keys
+        if (isClerkKeyError(e)) return null;
+      }
+      throw e;
     }
+  };
 
-    // Otherwise, return a middleware that can be called with a request and event
-    // eg, export default clerkMiddleware(auth => { ... });
-    return nextMiddleware;
-  } catch (e: any) {
-    // If we're in development
-    if (!!process && process.env.NODE_ENV === 'development') {
-      // And this is a clerkKeyError, return a no-op to allow the ClerkProvider to fetch the keys
-      if (isClerkKeyError(e)) return () => null;
-    }
-    throw e;
+  // If we have a request and event, we're being called as a middleware directly
+  // eg, export default clerkMiddleware;
+  if (request && event) {
+    return nextMiddleware(request, event);
   }
+
+  // Otherwise, return a middleware that can be called with a request and event
+  // eg, export default clerkMiddleware(auth => { ... });
+  return nextMiddleware;
 });
 
 const parseRequestAndEvent = (args: unknown[]) => {
