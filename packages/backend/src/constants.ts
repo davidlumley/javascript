@@ -20,6 +20,7 @@ const Cookies = {
   Handshake: '__clerk_handshake',
   DevBrowser: '__clerk_db_jwt',
   EphemeralPublishableKey: '__clerk_ephemeral_publishable_key',
+  EphemeralSecretKey: '__clerk_ephemeral_secret_key',
 } as const;
 
 const QueryParameters = {

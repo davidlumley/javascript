@@ -1,5 +1,8 @@
+import { constants } from '@clerk/backend/internal';
 import type { EphemeralKeys, InitialState, Without } from '@clerk/types';
 import * as fs from 'fs';
+import { cookies } from 'next/headers';
+import { redirect } from 'next/navigation';
 import * as path from 'path';
 import React from 'react';
 import xdg from 'xdg-app-paths';
@@ -73,11 +76,27 @@ export async function ClerkProvider(
   const { children, ...rest } = props;
   const state = initialState()?.__clerk_ssr_state as InitialState;
 
+  const providerProps = { ...mergeNextClerkPropsWithEnv(rest) };
+  let keys = {
+    publishableKey: providerProps.publishableKey,
+    secretKey: providerProps.secretKey,
+  };
   // TODO: Verify keys are not already set in initialState, or in the cookie
-  const keys = await getEphemeralKeys();
+  if (providerProps.publishableKey === '') {
+    const cookiePublishableKey = cookies().get(constants.Cookies.EphemeralPublishableKey)?.value;
+    if (!cookiePublishableKey || cookiePublishableKey === '') {
+      keys = await getEphemeralKeys();
+      redirect(`/?ephemeralPublishableKey=${keys.publishableKey}&ephemeralSecretKey=${keys.secretKey}`);
+    } else {
+      keys = {
+        publishableKey: cookiePublishableKey,
+        secretKey: providerProps.secretKey,
+      };
+    }
+  }
   return (
     <ClientClerkProvider
-      {...mergeNextClerkPropsWithEnv(rest)}
+      {...providerProps}
       initialState={state}
       publishableKey={keys.publishableKey}
     >

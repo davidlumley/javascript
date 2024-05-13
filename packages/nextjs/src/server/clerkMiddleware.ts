@@ -8,6 +8,7 @@ import type {
 import { AuthStatus, constants, createClerkRequest, createRedirect } from '@clerk/backend/internal';
 import { isClerkKeyError } from '@clerk/shared';
 import { eventMethodCalled } from '@clerk/shared/telemetry';
+import type { EphemeralKeys } from '@clerk/types';
 import type { NextMiddleware } from 'next/server';
 import { NextResponse } from 'next/server';
 
@@ -91,14 +92,27 @@ export const clerkMiddleware: ClerkMiddleware = withLogger('clerkMiddleware', lo
   let ephemeralPublishableKey: string | undefined;
   let ephemeralSecretKey: string | undefined;
 
-  // const setEphemeralKeys = (keys: EphemeralKeys) => {
-  //   ephemeralPublishableKey = keys.publishableKey;
-  //   ephemeralSecretKey = keys.secretKey;
-  // };
+  const setEphemeralKeys = (keys: EphemeralKeys) => {
+    ephemeralPublishableKey = keys.publishableKey;
+    ephemeralSecretKey = keys.secretKey;
+  };
 
   const nextMiddleware: NextMiddleware = async (request, event) => {
     try {
       // TODO: Check request for ephemeral keys if they exist, if they do set them
+      if (request.nextUrl.searchParams.get('ephemeralPublishableKey')) {
+        const publishableKey = request.nextUrl.searchParams.get('ephemeralPublishableKey');
+        const secretKey = request.nextUrl.searchParams.get('ephemeralSecretKey');
+        if (!publishableKey || !secretKey) {
+          throw new Error('Ephemeral keys not found');
+        }
+
+        setEphemeralKeys({
+          publishableKey,
+          secretKey,
+        });
+      }
+
       const publishableKey = assertKey(params.publishableKey || ephemeralPublishableKey || PUBLISHABLE_KEY, () =>
         errorThrower.throwMissingPublishableKeyError(),
       );
@@ -151,9 +165,15 @@ export const clerkMiddleware: ClerkMiddleware = withLogger('clerkMiddleware', lo
       }
 
       if (ephemeralPublishableKey) {
-        handlerResult.cookies.set(constants.Cookies.EphemeralPublishableKey, options.publishableKey || '');
+        handlerResult.cookies.set(constants.Cookies.EphemeralPublishableKey, ephemeralPublishableKey);
       } else {
         handlerResult.cookies.delete(constants.Cookies.EphemeralPublishableKey);
+      }
+
+      if (ephemeralSecretKey) {
+        handlerResult.cookies.set(constants.Cookies.EphemeralSecretKey, ephemeralSecretKey);
+      } else {
+        handlerResult.cookies.delete(constants.Cookies.EphemeralSecretKey);
       }
 
       if (isRedirect(handlerResult)) {

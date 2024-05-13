@@ -21,6 +21,9 @@ export const createGetAuth = ({
         logger.enable();
       }
 
+      // TODO: Probably need to update this to also get ephemeral secret key from URL params
+      const secretKey = opts?.secretKey || getCookie(req, constants.Cookies.EphemeralSecretKey) || SECRET_KEY;
+
       // When the auth status is set, we trust that the middleware has already run
       // Then, we don't have to re-verify the JWT here,
       // we can just strip out the claims manually.
@@ -40,14 +43,14 @@ export const createGetAuth = ({
         apiUrl: API_URL,
         apiVersion: API_VERSION,
         authMessage,
-        secretKey: opts?.secretKey || SECRET_KEY,
+        secretKey,
         authReason,
       };
 
       logger.debug('Options debug', options);
 
       if (authStatus === AuthStatus.SignedIn) {
-        assertTokenSignature(authToken as string, options.secretKey, authSignature);
+        assertTokenSignature(authToken as string, secretKey, authSignature);
 
         const jwt = decodeJwt(authToken as string);
 
