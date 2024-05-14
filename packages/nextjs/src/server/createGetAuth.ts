@@ -21,7 +21,8 @@ export const createGetAuth = ({
         logger.enable();
       }
 
-      // TODO: Probably need to update this to also get ephemeral secret key from URL params
+      // Note: This is a workaround to allow the secret key to be set in the
+      // middleware at runtime and passed to the getAuth function.
       const secretKey = opts?.secretKey || getCookie(req, constants.Cookies.EphemeralSecretKey) || SECRET_KEY;
 
       // When the auth status is set, we trust that the middleware has already run
