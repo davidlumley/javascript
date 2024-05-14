@@ -8,7 +8,6 @@ import type {
 import { AuthStatus, constants, createClerkRequest, createRedirect } from '@clerk/backend/internal';
 import { isClerkKeyError } from '@clerk/shared';
 import { eventMethodCalled } from '@clerk/shared/telemetry';
-import type { EphemeralKeys } from '@clerk/types';
 import type { NextMiddleware } from 'next/server';
 import { NextResponse } from 'next/server';
 
@@ -89,34 +88,50 @@ export const clerkMiddleware: ClerkMiddleware = withLogger('clerkMiddleware', lo
     }),
   );
 
+  let ephemeralMode = false;
   let ephemeralPublishableKey: string | undefined;
   let ephemeralSecretKey: string | undefined;
 
-  const setEphemeralKeys = (keys: EphemeralKeys) => {
-    ephemeralPublishableKey = keys.publishableKey;
-    ephemeralSecretKey = keys.secretKey;
-  };
-
   const nextMiddleware: NextMiddleware = async (request, event) => {
+    // We wrap this in a try/catch to return an empty middleware when the app does not have keys setup
+    // and is running locally.
     try {
-      // TODO: Check request for ephemeral keys if they exist, if they do set them
-      if (request.nextUrl.searchParams.get('ephemeralPublishableKey')) {
-        const publishableKey = request.nextUrl.searchParams.get('ephemeralPublishableKey');
-        const secretKey = request.nextUrl.searchParams.get('ephemeralSecretKey');
-        if (!publishableKey || !secretKey) {
-          throw new Error('Ephemeral keys not found');
+      if (!!process && process.env.NODE_ENV === 'development') {
+        if (!params.publishableKey && !PUBLISHABLE_KEY) {
+          ephemeralMode = true;
         }
-
-        setEphemeralKeys({
-          publishableKey,
-          secretKey,
-        });
       }
 
-      const publishableKey = assertKey(params.publishableKey || ephemeralPublishableKey || PUBLISHABLE_KEY, () =>
+      if (ephemeralMode && !ephemeralPublishableKey) {
+        const searchParams: Record<string, string> = {};
+        // TODO: Must be a native way to get this information
+        try {
+          request.nextUrl.search
+            .split('?')[1] // remove the ? e.g. "ephemeralPublishableKey=pk"
+            .split('&') // split by & e.g. "ephemeralPublishableKey=pk&ephemeralSecretKey=sk" => ["ephemeralPublishableKey=pk", "ephemeralSecretKey=sk"]
+            .map(param => {
+              const [key, val] = param.split('=');
+              searchParams[key] = val;
+            }); // split by = e.g. "ephemeralPublishableKey"
+        } catch (e) {
+          console.error(e);
+          null; // No search params
+        }
+
+        if (searchParams[constants.QueryParameters.EphemeralPublishableKey]) {
+          ephemeralPublishableKey = searchParams[constants.QueryParameters.EphemeralPublishableKey] || '';
+          ephemeralSecretKey = searchParams[constants.QueryParameters.EphemeralSecretKey] || '';
+          if (!ephemeralPublishableKey || !ephemeralSecretKey) {
+            // TODO: Replace with a real error using Clerk's template
+            throw new Error('Failed to find ephemeral keys');
+          }
+        }
+      }
+
+      const publishableKey = assertKey(params.publishableKey || PUBLISHABLE_KEY || ephemeralPublishableKey || '', () =>
         errorThrower.throwMissingPublishableKeyError(),
       );
-      const secretKey = assertKey(params.secretKey || ephemeralSecretKey || SECRET_KEY, () =>
+      const secretKey = assertKey(params.secretKey || SECRET_KEY || ephemeralSecretKey || '', () =>
         errorThrower.throwMissingSecretKeyError(),
       );
 
@@ -164,16 +179,12 @@ export const clerkMiddleware: ClerkMiddleware = withLogger('clerkMiddleware', lo
         handlerResult = handleControlFlowErrors(e, clerkRequest, requestState) as NextResponse;
       }
 
-      if (ephemeralPublishableKey) {
-        handlerResult.cookies.set(constants.Cookies.EphemeralPublishableKey, ephemeralPublishableKey);
-      } else {
-        handlerResult.cookies.delete(constants.Cookies.EphemeralPublishableKey);
-      }
-
-      if (ephemeralSecretKey) {
-        handlerResult.cookies.set(constants.Cookies.EphemeralSecretKey, ephemeralSecretKey);
-      } else {
-        handlerResult.cookies.delete(constants.Cookies.EphemeralSecretKey);
+      // TODO: Maybe extract this?
+      if (ephemeralMode && ephemeralPublishableKey && ephemeralSecretKey) {
+        if (!request.cookies.get(constants.Cookies.EphemeralPublishableKey)) {
+          handlerResult.cookies.set(constants.Cookies.EphemeralPublishableKey, ephemeralPublishableKey);
+          handlerResult.cookies.set(constants.Cookies.EphemeralSecretKey, ephemeralSecretKey);
+        }
       }
 
       if (isRedirect(handlerResult)) {

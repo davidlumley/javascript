@@ -17,7 +17,6 @@ const loadKeysFromConfig = () => {
   const config_dir = xdg.config();
   const config_path = path.join(config_dir, 'clerk', 'config.json');
 
-  console.log('Trying to load keys from config file: ', config_path);
   try {
     const keys: EphemeralKeys = JSON.parse(fs.readFileSync(config_path, 'utf8'));
 
@@ -33,7 +32,6 @@ const writeEphemeralKeysToConfig = (keys: EphemeralKeys) => {
   const config_dir = xdg.config();
   const config_path = path.join(config_dir, 'clerk', 'config.json');
 
-  console.log('Trying to write keys to config file: ', config_path);
   try {
     fs.mkdirSync(path.dirname(config_path), { recursive: true });
     fs.writeFileSync(config_path, JSON.stringify(keys), {
@@ -57,16 +55,10 @@ const fetchEphemeralKeys = async () => {
 
 const getEphemeralKeys = async () => {
   const keys = loadKeysFromConfig();
-  if (keys) {
-    // TODO: Figure out how to pass these keys to the middleware, maybe a redirect if there's no ephemeral publishable key set as a cookie yet?
-    return keys;
-  }
+  if (keys) return keys;
 
   const newKeys = await fetchEphemeralKeys();
-
   writeEphemeralKeysToConfig(newKeys);
-  // TODO: Figure out how to pass these keys to the middleware, maybe a redirect if there's no ephemeral publishable key set as a cookie yet?
-
   return newKeys;
 };
 
@@ -81,16 +73,20 @@ export async function ClerkProvider(
     publishableKey: providerProps.publishableKey,
     secretKey: providerProps.secretKey,
   };
+
   // TODO: Verify keys are not already set in initialState, or in the cookie
-  if (providerProps.publishableKey === '') {
-    const cookiePublishableKey = cookies().get(constants.Cookies.EphemeralPublishableKey)?.value;
-    if (!cookiePublishableKey || cookiePublishableKey === '') {
+  if (!providerProps.publishableKey) {
+    const cookiePublishableKey = cookies().get(constants.QueryParameters.EphemeralPublishableKey)?.value;
+    const cookieSecretKey = cookies().get(constants.QueryParameters.EphemeralSecretKey)?.value;
+    if (!cookiePublishableKey) {
       keys = await getEphemeralKeys();
-      redirect(`/?ephemeralPublishableKey=${keys.publishableKey}&ephemeralSecretKey=${keys.secretKey}`);
+      redirect(
+        `?${constants.QueryParameters.EphemeralPublishableKey}=${keys.publishableKey}&${constants.QueryParameters.EphemeralSecretKey}=${keys.secretKey}`,
+      );
     } else {
       keys = {
         publishableKey: cookiePublishableKey,
-        secretKey: providerProps.secretKey,
+        secretKey: cookieSecretKey,
       };
     }
   }
