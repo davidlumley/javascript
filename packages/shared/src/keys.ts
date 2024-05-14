@@ -1,11 +1,6 @@
-import type { EphemeralKeys, PublishableKey } from '@clerk/types';
+import type { PublishableKey } from '@clerk/types';
 
-import {
-  APP_URL_HEADER,
-  DEV_OR_STAGING_SUFFIXES,
-  LEGACY_DEV_INSTANCE_SUFFIXES,
-  LOCAL_EPHEMERAL_KEY_URL,
-} from './constants';
+import { DEV_OR_STAGING_SUFFIXES, LEGACY_DEV_INSTANCE_SUFFIXES } from './constants';
 import { isomorphicAtob } from './isomorphicAtob';
 import { isomorphicBtoa } from './isomorphicBtoa';
 
@@ -114,25 +109,3 @@ export function isDevelopmentFromSecretKey(apiKey: string): boolean {
 export function isProductionFromSecretKey(apiKey: string): boolean {
   return apiKey.startsWith('live_') || apiKey.startsWith('sk_live_');
 }
-
-export const fetchEphemeralKeys = (() => {
-  let keys: EphemeralKeys | null = null;
-
-  return async ({ appUrl }: { appUrl: string }) => {
-    if (!keys) {
-      const response = await fetch(LOCAL_EPHEMERAL_KEY_URL, {
-        headers: {
-          'Content-Type': 'application/json',
-          [APP_URL_HEADER]: appUrl,
-        },
-      });
-      const data = await response.json();
-      keys = {
-        publishableKey: data.publishable_key,
-        secretKey: data.secret_key,
-        expiresAt: data.expires_at,
-      };
-    }
-    return keys;
-  };
-})();

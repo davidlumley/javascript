@@ -7,6 +7,7 @@ import { API_URL, API_VERSION, constants, USER_AGENT } from '../constants';
 // For more information refer to https://sinonjs.org/how-to/stub-dependency/
 import runtime from '../runtime';
 import { assertValidSecretKey } from '../util/assertValidSecretKey';
+import { fetchEphemeralKeys } from '../util/fetchEphemeralKeys';
 import { joinPaths } from '../util/path';
 import { deserialize } from './resources/Deserializer';
 
@@ -54,8 +55,16 @@ type BuildRequestOptions = {
   /* Library/SDK name */
   userAgent?: string;
 };
+
 export function buildRequest(options: BuildRequestOptions) {
   const requestFn = async <T>(requestOptions: ClerkBackendApiRequestOptions): Promise<ClerkBackendApiResponse<T>> => {
+    if (!options.secretKey && !!process && process.env.NODE_ENV === 'development') {
+      const keys = await fetchEphemeralKeys();
+      if (keys) {
+        options.secretKey = keys.secretKey;
+      }
+    }
+
     const { secretKey, apiUrl = API_URL, apiVersion = API_VERSION, userAgent = USER_AGENT } = options;
     const { path, method, queryParams, headerParams, bodyParams, formData } = requestOptions;
 
