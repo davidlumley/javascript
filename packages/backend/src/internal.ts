@@ -21,8 +21,7 @@ export { AuthStatus } from './tokens/authStatus';
 export type { RequestState, SignedInState, SignedOutState } from './tokens/authStatus';
 
 export { decorateObjectWithResources, stripPrivateDataFromObject } from './util/decorateObjectWithResources';
+export { fetchEphemeralKeys } from './util/fetchEphemeralKeys';
 
 export { createClerkRequest } from './tokens/clerkRequest';
 export type { ClerkRequest } from './tokens/clerkRequest';
-
-export { fetchEphemeralKeys } from './util/fetchEphemeralKeys';
