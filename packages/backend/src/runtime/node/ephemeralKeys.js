@@ -7,17 +7,22 @@ const CONFIG_PATH = path.join(process.cwd(), 'node_modules', '.cache', 'clerkjs'
 
 function loadKeysFromConfig() {
   try {
-    const config = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
-    const { expiresAt, ...keys } = config;
+    if (fs.existsSync(CONFIG_PATH)) {
+      const config = JSON.parse(fs.readFileSync(CONFIG_PATH, { encoding: 'utf-8' }));
+      const { expiresAt, ...keys } = config;
 
-    if (expiresAt < now()) {
+      if (expiresAt < now()) {
+        return null;
+      }
+
+      return keys;
+    }
+  } catch (error) {
+    if (error instanceof Error && error.message.includes('ENOENT')) {
       return null;
     }
 
-    return keys;
-  } catch (error) {
-    // TODO: Handle file doesn't exist error more gracefully - file will never exist first time we try
-    console.error(error);
+    throw error;
   }
 
   return null;
