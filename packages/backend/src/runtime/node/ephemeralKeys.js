@@ -53,15 +53,32 @@ async function fetchEphemeralKeys() {
   }
 
   const newKeys = await fetchNewKeys();
-  writeKeysToConfig(newKeys);
-  return newKeys;
+  if (isPublishableKey(newKeys.publishableKey)) {
+    writeKeysToConfig(newKeys);
+    return newKeys;
+  }
+
+  // TODO: Handle 204, 4xx and 5xx HTTP status codes.
 }
 
-// TODO: Replace with call to fetch keys, copy paste your own for now
+/**
+ * Example demo instance payload:
+ *
+ * {
+ *   object: "demo_dev_instance",
+ *   frontend_api_key: "pk_test_****************************************************",
+ *   backend_api_key: "sk_test_******************************************",
+ *   jwt_verification_key: "********************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************",
+ *   accounts_url: "https://******-*******-**.accountsstage.dev"
+ * }
+ */
+
 async function fetchNewKeys() {
+  const demo = await postJSON('https://api.clerkstage.dev/v1/public/demo_instance');
+
   return {
-    publishableKey: 'pk_test_',
-    secretKey: 'sk_test_',
+    publishableKey: demo.frontend_api_key,
+    secretKey: demo.backend_api_key,
     expiresAt: daysFromNow(1),
   };
 }
@@ -72,6 +89,53 @@ function now() {
 
 function daysFromNow(days) {
   return Math.floor(Date.now() / 1000) + 60 * 60 * 24 * days;
+}
+
+function postJSON(url, body) {
+  return apiResult(
+    fetch(url, {
+      method: 'POST',
+      body: body ? JSON.stringify(body) : undefined,
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    }),
+  );
+}
+
+async function apiResult(whenResponse) {
+  const response = await whenResponse;
+
+  if (response.status === 204) {
+    return null;
+  } else if (response.ok) {
+    const body = await response.json();
+    return body;
+  } else if (response.status >= 400 && response.status < 500) {
+    const body = await response.json();
+    const error = new ClientError(response.statusText, response.status, body);
+    throw error;
+  } else {
+    const error = new ServerError(response.statusText, response.status);
+    throw error;
+  }
+}
+
+class ClientError extends Error {
+  constructor(message, status, body) {
+    super(message);
+    this.status = status;
+    this.name = 'ClientError';
+    this.body = body;
+  }
+}
+
+class ServerError extends Error {
+  constructor(message, status) {
+    super(message);
+    this.status = status;
+    this.name = 'ServerError';
+  }
 }
 
 module.exports.fetchEphemeralKeys = fetchEphemeralKeys;
