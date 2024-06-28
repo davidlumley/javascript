@@ -6,6 +6,7 @@ import type {
   RequestState,
 } from '@clerk/backend/internal';
 import { AuthStatus, constants, createClerkRequest, createRedirect } from '@clerk/backend/internal';
+import { isClerkKeyError } from '@clerk/shared';
 import { eventMethodCalled } from '@clerk/shared/telemetry';
 import type { NextMiddleware } from 'next/server';
 import { NextResponse } from 'next/server';
@@ -76,86 +77,144 @@ export const clerkMiddleware: ClerkMiddleware = withLogger('clerkMiddleware', lo
     logger.enable();
   }
 
-  const publishableKey = assertKey(params.publishableKey || PUBLISHABLE_KEY, () =>
-    errorThrower.throwMissingPublishableKeyError(),
-  );
-  const secretKey = assertKey(params.secretKey || SECRET_KEY, () => errorThrower.throwMissingSecretKeyError());
   const signInUrl = params.signInUrl || SIGN_IN_URL;
   const signUpUrl = params.signUpUrl || SIGN_UP_URL;
-
-  const options = {
-    ...params,
-    publishableKey,
-    secretKey,
-    signInUrl,
-    signUpUrl,
-  };
 
   clerkClient.telemetry.record(
     eventMethodCalled('clerkMiddleware', {
       handler: Boolean(handler),
-      satellite: Boolean(options.isSatellite),
-      proxy: Boolean(options.proxyUrl),
+      satellite: Boolean(params.isSatellite),
+      proxy: Boolean(params.proxyUrl),
     }),
   );
 
+  let ephemeralMode = false;
+  let ephemeralPublishableKey: string | undefined;
+  let ephemeralSecretKey: string | undefined;
+
   const nextMiddleware: NextMiddleware = async (request, event) => {
-    const clerkRequest = createClerkRequest(request);
-    logger.debug('options', options);
-    logger.debug('url', () => clerkRequest.toJSON());
-
-    const requestState = await clerkClient.authenticateRequest(
-      clerkRequest,
-      createAuthenticateRequestOptions(clerkRequest, options),
-    );
-
-    logger.debug('requestState', () => ({
-      status: requestState.status,
-      headers: JSON.stringify(Object.fromEntries(requestState.headers)),
-      reason: requestState.reason,
-    }));
-
-    const locationHeader = requestState.headers.get(constants.Headers.Location);
-    if (locationHeader) {
-      return new Response(null, { status: 307, headers: requestState.headers });
-    } else if (requestState.status === AuthStatus.Handshake) {
-      throw new Error('Clerk: handshake status without redirect');
-    }
-
-    const authObject = requestState.toAuth();
-    logger.debug('auth', () => ({ auth: authObject, debug: authObject.debug() }));
-
-    const redirectToSignIn = createMiddlewareRedirectToSignIn(clerkRequest);
-    const protect = createMiddlewareProtect(clerkRequest, authObject, redirectToSignIn);
-    const authObjWithMethods: ClerkMiddlewareAuthObject = Object.assign(authObject, { protect, redirectToSignIn });
-
-    let handlerResult: Response = NextResponse.next();
+    // We wrap this in a try/catch to return an empty middleware when the app does not have keys setup
+    // and is running locally.
     try {
-      handlerResult = (await handler?.(() => authObjWithMethods, request, event)) || handlerResult;
+      if (!!process && process.env.NODE_ENV === 'development') {
+        if (!params.publishableKey && !PUBLISHABLE_KEY) {
+          ephemeralMode = true;
+        }
+      }
+
+      if (ephemeralMode && !ephemeralPublishableKey) {
+        const searchParams: Record<string, string> = {};
+        // TODO: Must be a native way to get this information
+        try {
+          request.nextUrl.search
+            .split('?')[1] // remove the ? e.g. "ephemeralPublishableKey=pk"
+            .split('&') // split by & e.g. "ephemeralPublishableKey=pk&ephemeralSecretKey=sk" => ["ephemeralPublishableKey=pk", "ephemeralSecretKey=sk"]
+            .map(param => {
+              const [key, val] = param.split('=');
+              searchParams[key] = val;
+            }); // split by = e.g. "ephemeralPublishableKey"
+        } catch (e) {
+          console.error(e);
+          null; // No search params
+        }
+
+        if (searchParams[constants.QueryParameters.EphemeralPublishableKey]) {
+          ephemeralPublishableKey = searchParams[constants.QueryParameters.EphemeralPublishableKey] || '';
+          ephemeralSecretKey = searchParams[constants.QueryParameters.EphemeralSecretKey] || '';
+          if (!ephemeralPublishableKey || !ephemeralSecretKey) {
+            // TODO: Replace with a real error using Clerk's template
+            throw new Error('Failed to find ephemeral keys');
+          }
+        }
+      }
+
+      const publishableKey = assertKey(params.publishableKey || PUBLISHABLE_KEY || ephemeralPublishableKey || '', () =>
+        errorThrower.throwMissingPublishableKeyError(),
+      );
+      const secretKey = assertKey(params.secretKey || SECRET_KEY || ephemeralSecretKey || '', () =>
+        errorThrower.throwMissingSecretKeyError(),
+      );
+
+      const options = {
+        ...params,
+        publishableKey,
+        secretKey,
+        signInUrl,
+        signUpUrl,
+      };
+
+      const clerkRequest = createClerkRequest(request);
+      logger.debug('options', options);
+      logger.debug('url', () => clerkRequest.toJSON());
+
+      const requestState = await clerkClient.authenticateRequest(
+        clerkRequest,
+        createAuthenticateRequestOptions(clerkRequest, options),
+      );
+
+      logger.debug('requestState', () => ({
+        status: requestState.status,
+        headers: JSON.stringify(Object.fromEntries(requestState.headers)),
+        reason: requestState.reason,
+      }));
+
+      const locationHeader = requestState.headers.get(constants.Headers.Location);
+      if (locationHeader) {
+        return new Response(null, { status: 307, headers: requestState.headers });
+      } else if (requestState.status === AuthStatus.Handshake) {
+        throw new Error('Clerk: handshake status without redirect');
+      }
+
+      const authObject = requestState.toAuth();
+      logger.debug('auth', () => ({ auth: authObject, debug: authObject.debug() }));
+
+      const redirectToSignIn = createMiddlewareRedirectToSignIn(clerkRequest);
+      const protect = createMiddlewareProtect(clerkRequest, authObject, redirectToSignIn);
+      const authObjWithMethods: ClerkMiddlewareAuthObject = Object.assign(authObject, { protect, redirectToSignIn });
+
+      let handlerResult: NextResponse = NextResponse.next();
+      try {
+        handlerResult = ((await handler?.(() => authObjWithMethods, request, event)) as NextResponse) || handlerResult;
+      } catch (e: any) {
+        handlerResult = handleControlFlowErrors(e, clerkRequest, requestState) as NextResponse;
+      }
+
+      // TODO: Maybe extract this?
+      if (ephemeralMode && ephemeralPublishableKey && ephemeralSecretKey) {
+        if (!request.cookies.get(constants.Cookies.EphemeralPublishableKey)) {
+          handlerResult.cookies.set(constants.Cookies.EphemeralPublishableKey, ephemeralPublishableKey);
+          handlerResult.cookies.set(constants.Cookies.EphemeralSecretKey, ephemeralSecretKey);
+        }
+      }
+
+      if (isRedirect(handlerResult)) {
+        logger.debug('handlerResult is redirect');
+        return serverRedirectWithAuth(clerkRequest, handlerResult, options);
+      }
+
+      if (options.debug) {
+        setRequestHeadersOnNextResponse(handlerResult, clerkRequest, { [constants.Headers.EnableDebug]: 'true' });
+      }
+
+      decorateRequest(clerkRequest, handlerResult, requestState, options.secretKey);
+
+      // TODO @nikos: we need to make this more generic
+      // and move the logic in clerk/backend
+      if (requestState.headers) {
+        requestState.headers.forEach((value, key) => {
+          handlerResult.headers.append(key, value);
+        });
+      }
+
+      return handlerResult;
     } catch (e: any) {
-      handlerResult = handleControlFlowErrors(e, clerkRequest, requestState);
+      // If we're in development
+      if (!!process && process.env.NODE_ENV === 'development') {
+        // And this is a clerkKeyError, return a no-op to allow the ClerkProvider to fetch the keys
+        if (isClerkKeyError(e)) return null;
+      }
+      throw e;
     }
-
-    if (isRedirect(handlerResult)) {
-      logger.debug('handlerResult is redirect');
-      return serverRedirectWithAuth(clerkRequest, handlerResult, options);
-    }
-
-    if (options.debug) {
-      setRequestHeadersOnNextResponse(handlerResult, clerkRequest, { [constants.Headers.EnableDebug]: 'true' });
-    }
-
-    decorateRequest(clerkRequest, handlerResult, requestState, options.secretKey);
-
-    // TODO @nikos: we need to make this more generic
-    // and move the logic in clerk/backend
-    if (requestState.headers) {
-      requestState.headers.forEach((value, key) => {
-        handlerResult.headers.append(key, value);
-      });
-    }
-
-    return handlerResult;
   };
 
   // If we have a request and event, we're being called as a middleware directly

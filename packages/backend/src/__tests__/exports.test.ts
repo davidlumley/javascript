@@ -38,6 +38,7 @@ export default (QUnit: QUnit) => {
         'createRedirect',
         'debugRequestState',
         'decorateObjectWithResources',
+        'fetchEphemeralKeys',
         'makeAuthObjectSerializable',
         'signedInAuthObject',
         'signedOutAuthObject',
