@@ -7,9 +7,13 @@ const CONFIG_PATH = path.join(process.cwd(), 'node_modules', '.cache', 'clerkjs'
 
 function loadKeysFromConfig() {
   try {
-    const keys = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
+    const config = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
+    const { expiresAt, ...keys } = config;
 
-    // TODO: Add expiration check
+    if (expiresAt < now()) {
+      return null;
+    }
+
     return keys;
   } catch (error) {
     // TODO: Handle file doesn't exist error more gracefully - file will never exist first time we try
@@ -32,15 +36,6 @@ function writeKeysToConfig(keys) {
   }
 }
 
-// TODO: Replace with call to fetch keys, copy paste your own for now
-async function fetchNewKeys() {
-  return {
-    publishableKey: 'pk_test_',
-    secretKey: 'sk_test_',
-    expiresAt: Math.floor(Date.now() / 1000) + 3600,
-  };
-}
-
 async function fetchEphemeralKeys() {
   const keys = loadKeysFromConfig();
   if (keys) {
@@ -55,6 +50,23 @@ async function fetchEphemeralKeys() {
   const newKeys = await fetchNewKeys();
   writeKeysToConfig(newKeys);
   return newKeys;
+}
+
+// TODO: Replace with call to fetch keys, copy paste your own for now
+async function fetchNewKeys() {
+  return {
+    publishableKey: 'pk_test_',
+    secretKey: 'sk_test_',
+    expiresAt: daysFromNow(1),
+  };
+}
+
+function now() {
+  return daysFromNow(0);
+}
+
+function daysFromNow(days) {
+  return Math.floor(Date.now() / 1000) + 60 * 60 * 24 * days;
 }
 
 module.exports.fetchEphemeralKeys = fetchEphemeralKeys;
