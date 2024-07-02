@@ -3,19 +3,41 @@ const path = require('node:path');
 
 const { isPublishableKey } = require('@clerk/shared');
 
-const CONFIG_PATH = path.join(process.cwd(), 'node_modules', '.cache', 'clerkjs', 'ephemeral-config.json');
+async function fetchEphemeralKeys() {
+  const ephemeralAccount = read();
 
-function loadKeysFromConfig() {
+  if (ephemeralAccount) {
+    // NOTE: Could use a nicer way to verify valid keys and refetch
+    // if there is an issue so users aren't stuck trying to load
+    // bad keys.
+    if (isPublishableKey(ephemeralAccount.publishableKey)) {
+      return ephemeralAccount;
+    }
+  }
+
+  const newEphemeralAccount = await create();
+
+  if (isPublishableKey(newEphemeralAccount.publishableKey)) {
+    save(newEphemeralAccount);
+    return newEphemeralAccount;
+  }
+
+  // TODO: Handle 204, 4xx and 5xx HTTP status codes.
+}
+
+const PATH = path.join(process.cwd(), 'node_modules', '.cache', 'clerkjs', 'ephemeral-config.json');
+
+function read() {
   try {
-    if (fs.existsSync(CONFIG_PATH)) {
-      const config = JSON.parse(fs.readFileSync(CONFIG_PATH, { encoding: 'utf-8' }));
-      const { expiresAt, ...keys } = config;
+    if (fs.existsSync(PATH)) {
+      const config = JSON.parse(fs.readFileSync(PATH, { encoding: 'utf-8' }));
+      const { expiresAt } = config;
 
       if (expiresAt < now()) {
         return null;
       }
 
-      return keys;
+      return config;
     }
   } catch (error) {
     if (error instanceof Error && error.message.includes('ENOENT')) {
@@ -24,14 +46,15 @@ function loadKeysFromConfig() {
 
     throw error;
   }
-
-  return null;
 }
 
-function writeKeysToConfig(keys) {
+function save(ephemeralAccount) {
   try {
-    fs.mkdirSync(path.dirname(CONFIG_PATH), { recursive: true });
-    fs.writeFileSync(CONFIG_PATH, JSON.stringify(keys), {
+    fs.mkdirSync(path.dirname(PATH), { recursive: true });
+
+    const content = JSON.stringify(ephemeralAccount);
+
+    fs.writeFileSync(PATH, content, {
       encoding: 'utf8',
       mode: '0777',
       flag: 'w',
@@ -39,26 +62,6 @@ function writeKeysToConfig(keys) {
   } catch (error) {
     console.error(error);
   }
-}
-
-async function fetchEphemeralKeys() {
-  const keys = loadKeysFromConfig();
-  if (keys) {
-    // NOTE: Could use a nicer way to verify valid keys and refetch
-    // if there is an issue so users aren't stuck trying to load
-    // bad keys.
-    if (isPublishableKey(keys.publishableKey)) {
-      return keys;
-    }
-  }
-
-  const newKeys = await fetchNewKeys();
-  if (isPublishableKey(newKeys.publishableKey)) {
-    writeKeysToConfig(newKeys);
-    return newKeys;
-  }
-
-  // TODO: Handle 204, 4xx and 5xx HTTP status codes.
 }
 
 /**
@@ -73,7 +76,7 @@ async function fetchEphemeralKeys() {
  * }
  */
 
-async function fetchNewKeys() {
+async function create() {
   const demo = await postJSON('https://api.clerkstage.dev/v1/public/demo_instance');
 
   return {
