@@ -57,8 +57,8 @@ async function verify(config) {
       return false;
     }
 
-    // NOTE: Simulate failed verification after 60s
-    if (config.expiresAt < daysFromNow(1) - 60) {
+    // NOTE: Simulate failed verification after 15 minutes
+    if (config.expiresAt < daysFromNow(1) - 60 * 15) {
       return false;
     }
 
