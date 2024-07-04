@@ -102,29 +102,16 @@ export const clerkMiddleware: ClerkMiddleware = withLogger('clerkMiddleware', lo
         }
       }
 
-      if (ephemeralMode && !ephemeralPublishableKey) {
-        const searchParams: Record<string, string> = {};
-        // TODO: Must be a native way to get this information
-        try {
-          request.nextUrl.search
-            .split('?')[1] // remove the ? e.g. "ephemeralPublishableKey=pk"
-            .split('&') // split by & e.g. "ephemeralPublishableKey=pk&ephemeralSecretKey=sk" => ["ephemeralPublishableKey=pk", "ephemeralSecretKey=sk"]
-            .map(param => {
-              const [key, val] = param.split('=');
-              searchParams[key] = val;
-            }); // split by = e.g. "ephemeralPublishableKey"
-        } catch (e) {
-          console.error(e);
-          null; // No search params
-        }
+      if (ephemeralMode) {
+        const ephemeralKeys = Object.fromEntries(request.nextUrl.searchParams);
+        const queryEphemeralPublishableKey = ephemeralKeys[constants.QueryParameters.EphemeralPublishableKey];
+        const queryEphemeralSecretKey = ephemeralKeys[constants.QueryParameters.EphemeralSecretKey];
 
-        if (searchParams[constants.QueryParameters.EphemeralPublishableKey]) {
-          ephemeralPublishableKey = searchParams[constants.QueryParameters.EphemeralPublishableKey] || '';
-          ephemeralSecretKey = searchParams[constants.QueryParameters.EphemeralSecretKey] || '';
-          if (!ephemeralPublishableKey || !ephemeralSecretKey) {
-            // TODO: Replace with a real error using Clerk's template
-            throw new Error('Failed to find ephemeral keys');
-          }
+        if (queryEphemeralPublishableKey && ephemeralPublishableKey !== queryEphemeralPublishableKey) {
+          ephemeralPublishableKey = queryEphemeralPublishableKey;
+        }
+        if (queryEphemeralSecretKey && ephemeralSecretKey !== queryEphemeralSecretKey) {
+          ephemeralSecretKey = queryEphemeralSecretKey;
         }
       }
 
@@ -181,10 +168,8 @@ export const clerkMiddleware: ClerkMiddleware = withLogger('clerkMiddleware', lo
 
       // TODO: Maybe extract this?
       if (ephemeralMode && ephemeralPublishableKey && ephemeralSecretKey) {
-        if (!request.cookies.get(constants.Cookies.EphemeralPublishableKey)) {
-          handlerResult.cookies.set(constants.Cookies.EphemeralPublishableKey, ephemeralPublishableKey);
-          handlerResult.cookies.set(constants.Cookies.EphemeralSecretKey, ephemeralSecretKey);
-        }
+        handlerResult.cookies.set(constants.Cookies.EphemeralPublishableKey, ephemeralPublishableKey);
+        handlerResult.cookies.set(constants.Cookies.EphemeralSecretKey, ephemeralSecretKey);
       }
 
       if (isRedirect(handlerResult)) {
