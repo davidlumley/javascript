@@ -4,36 +4,30 @@ const path = require('node:path');
 const { isPublishableKey } = require('@clerk/shared');
 
 async function fetchEphemeralKeys() {
-  const ephemeralAccount = read();
+  let config = read();
 
-  if (ephemeralAccount) {
-    // NOTE: Could use a nicer way to verify valid keys and refetch
-    // if there is an issue so users aren't stuck trying to load
-    // bad keys.
-    if (isPublishableKey(ephemeralAccount.publishableKey)) {
-      return ephemeralAccount;
+  if (config) {
+    const verified = await verify(config);
+
+    if (verified) {
+      return config;
     }
   }
 
-  const newEphemeralAccount = await create();
+  config = await create();
+  save(config);
 
-  if (isPublishableKey(newEphemeralAccount.publishableKey)) {
-    save(newEphemeralAccount);
-    return newEphemeralAccount;
-  }
-
-  // TODO: Handle 204, 4xx and 5xx HTTP status codes.
+  return config;
 }
 
-const PATH = path.join(process.cwd(), 'node_modules', '.cache', 'clerkjs', 'ephemeral-config.json');
+const PATH = path.join(process.cwd(), 'node_modules', '.cache', 'clerkjs', 'ephemeral.json');
 
 function read() {
   try {
     if (fs.existsSync(PATH)) {
       const config = JSON.parse(fs.readFileSync(PATH, { encoding: 'utf-8' }));
-      const { expiresAt } = config;
 
-      if (expiresAt < now()) {
+      if (config.expiresAt < now()) {
         return null;
       }
 
@@ -48,20 +42,46 @@ function read() {
   }
 }
 
-function save(ephemeralAccount) {
+async function verify(config) {
   try {
-    fs.mkdirSync(path.dirname(PATH), { recursive: true });
+    // TODO: endpoint is not implemented yet.
+    //
+    // await postJSON('https://api.clerkstage.dev/v1/ephemeral-account/verify', {
+    //   publishable_key: config.publishableKey,
+    //   secret_key: config.secretKey,
+    // })
+    //
+    // return true
 
-    const content = JSON.stringify(ephemeralAccount);
+    if (!isPublishableKey(config.publishableKey)) {
+      return false;
+    }
 
-    fs.writeFileSync(PATH, content, {
-      encoding: 'utf8',
-      mode: '0777',
-      flag: 'w',
-    });
-  } catch (error) {
-    console.error(error);
+    // NOTE: Simulate failed verification after 60s
+    if (config.expiresAt < daysFromNow(1) - 60) {
+      return false;
+    }
+
+    return true;
+  } catch (err) {
+    if (err instanceof ClientError) {
+      return false;
+    }
+
+    throw err;
   }
+}
+
+function save(config) {
+  fs.mkdirSync(path.dirname(PATH), { recursive: true });
+
+  const content = JSON.stringify(config);
+
+  fs.writeFileSync(PATH, content, {
+    encoding: 'utf8',
+    mode: '0777',
+    flag: 'w',
+  });
 }
 
 /**
