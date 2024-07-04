@@ -16,5 +16,3 @@ export const STAGING_ENV_SUFFIXES = ['.accountsstage.dev'];
 export const LOCAL_API_URL = 'https://api.lclclerk.com';
 export const STAGING_API_URL = 'https://api.clerkstage.dev';
 export const PROD_API_URL = 'https://api.clerk.com';
-export const LOCAL_EPHEMERAL_KEY_URL = 'http://localhost:8787/auth.json';
-export const APP_URL_HEADER = 'x-clerk-app-url';
