@@ -8,5 +8,5 @@ export type PublishableKey = {
 export type EphemeralKeys = {
   publishableKey: string;
   secretKey: string;
-  expiresAt?: number;
+  expiresAt: number;
 };
