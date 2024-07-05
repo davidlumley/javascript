@@ -5,7 +5,7 @@ export type PublishableKey = {
   instanceType: InstanceType;
 };
 
-export type EphemeralKeys = {
+export type EphemeralAccount = {
   publishableKey: string;
   secretKey: string;
   expiresAt: number;

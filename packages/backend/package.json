@@ -23,9 +23,9 @@
       },
       "default": "./dist/runtime/browser/crypto.mjs"
     },
-    "#ephemeralKeys": {
-      "node": "./dist/runtime/node/ephemeralKeys.js",
-      "default": "./dist/runtime/browser/ephemeralKeys.js"
+    "#ephemeral": {
+      "node": "./dist/runtime/node/ephemeral.js",
+      "default": "./dist/runtime/browser/ephemeral.js"
     }
   },
   "exports": {

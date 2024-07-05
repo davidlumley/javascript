@@ -1,4 +1,4 @@
-import { constants, fetchEphemeralKeys } from '@clerk/backend/internal';
+import { constants, fetchEphemeralAccount } from '@clerk/backend/internal';
 import type { InitialState, Without } from '@clerk/types';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
@@ -18,17 +18,17 @@ export async function ClerkProvider(
   const providerProps = { ...mergeNextClerkPropsWithEnv(rest) };
 
   if (!providerProps.publishableKey) {
-    const keys = await fetchEphemeralKeys();
+    const ephemeralAccount = await fetchEphemeralAccount();
     const params = new URLSearchParams();
     const cookiePublishableKey = cookies().get(constants.QueryParameters.EphemeralPublishableKey)?.value;
     const cookieSecretKey = cookies().get(constants.QueryParameters.EphemeralSecretKey)?.value;
 
-    if (!cookiePublishableKey || cookiePublishableKey !== keys.publishableKey) {
-      params.set(constants.QueryParameters.EphemeralPublishableKey, keys.publishableKey);
+    if (!cookiePublishableKey || cookiePublishableKey !== ephemeralAccount.publishableKey) {
+      params.set(constants.QueryParameters.EphemeralPublishableKey, ephemeralAccount.publishableKey);
     }
 
-    if (!cookieSecretKey || cookieSecretKey !== keys.secretKey) {
-      params.set(constants.QueryParameters.EphemeralSecretKey, keys.secretKey);
+    if (!cookieSecretKey || cookieSecretKey !== ephemeralAccount.secretKey) {
+      params.set(constants.QueryParameters.EphemeralSecretKey, ephemeralAccount.secretKey);
     }
 
     if (params.size === 2) {
@@ -36,7 +36,7 @@ export async function ClerkProvider(
     }
 
     providerProps.ephemeral = true;
-    providerProps.publishableKey = keys.publishableKey;
+    providerProps.publishableKey = ephemeralAccount.publishableKey;
   }
 
   return (

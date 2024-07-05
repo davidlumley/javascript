@@ -15,12 +15,12 @@
 // @ts-ignore - These are package subpaths
 import { webcrypto as crypto } from '#crypto';
 // @ts-ignore - These are package subpaths
-import { fetchEphemeralKeys } from '#ephemeralKeys';
+import { fetchEphemeralAccount } from '#ephemeral';
 
 type Runtime = {
   crypto: Crypto;
-  fetchEphemeralKeys: typeof fetchEphemeralKeys;
   fetch: typeof globalThis.fetch;
+  fetchEphemeralAccount: typeof fetchEphemeralAccount;
   AbortController: typeof globalThis.AbortController;
   Blob: typeof globalThis.Blob;
   FormData: typeof globalThis.FormData;
@@ -40,8 +40,8 @@ const globalFetch = fetch.bind(globalThis);
 // For more information refer to https://sinonjs.org/how-to/stub-dependency/
 const runtime: Runtime = {
   crypto,
-  fetchEphemeralKeys,
   fetch: globalFetch,
+  fetchEphemeralAccount,
   AbortController: globalThis.AbortController,
   Blob: globalThis.Blob,
   FormData: globalThis.FormData,

@@ -58,9 +58,9 @@ type BuildRequestOptions = {
 export function buildRequest(options: BuildRequestOptions) {
   const requestFn = async <T>(requestOptions: ClerkBackendApiRequestOptions): Promise<ClerkBackendApiResponse<T>> => {
     if (!options.secretKey && !!process && process.env.NODE_ENV === 'development') {
-      const keys = await runtime.fetchEphemeralKeys();
-      if (keys) {
-        options.secretKey = keys.secretKey;
+      const ephemeralAccount = await runtime.fetchEphemeralAccount();
+      if (ephemeralAccount) {
+        options.secretKey = ephemeralAccount.secretKey;
       }
     }
 
