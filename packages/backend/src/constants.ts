@@ -19,6 +19,7 @@ const Cookies = {
   ClientUat: '__client_uat',
   Handshake: '__clerk_handshake',
   DevBrowser: '__clerk_db_jwt',
+  EphemeralExpiresAt: '__clerk_ephemeral_expires_at',
   EphemeralPublishableKey: '__clerk_ephemeral_publishable_key',
   EphemeralSecretKey: '__clerk_ephemeral_secret_key',
 } as const;
@@ -31,6 +32,7 @@ const QueryParameters = {
   Handshake: Cookies.Handshake,
   HandshakeHelp: '__clerk_help',
   LegacyDevBrowser: '__dev_session',
+  EphemeralExpiresAt: '__clerk_ephemeral_expires_at',
   EphemeralPublishableKey: '__clerk_ephemeral_publishable_key',
   EphemeralSecretKey: '__clerk_ephemeral_secret_key',
 } as const;
