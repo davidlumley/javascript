@@ -189,9 +189,9 @@ export const clerkMiddleware: ClerkMiddleware = withLogger('clerkMiddleware', lo
 
       try {
         if (ephemeralMode) {
-          const ephemeralKeys = Object.fromEntries(request.nextUrl.searchParams);
-          const queryEphemeralPublishableKey = ephemeralKeys[constants.QueryParameters.EphemeralPublishableKey];
-          const queryEphemeralSecretKey = ephemeralKeys[constants.QueryParameters.EphemeralSecretKey];
+          const params = Object.fromEntries(request.nextUrl.searchParams);
+          const queryEphemeralPublishableKey = params[constants.QueryParameters.EphemeralPublishableKey];
+          const queryEphemeralSecretKey = params[constants.QueryParameters.EphemeralSecretKey];
 
           if (queryEphemeralPublishableKey && ephemeralPublishableKey !== queryEphemeralPublishableKey) {
             ephemeralPublishableKey = queryEphemeralPublishableKey;
