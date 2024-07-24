@@ -183,34 +183,27 @@ export const clerkMiddleware: ClerkMiddleware = withLogger('clerkMiddleware', lo
     };
 
     const nextMiddleware: NextMiddleware = async (request, event) => {
-      if (process.env.NODE_ENV !== 'development') {
+      if (!ephemeralMode) {
         return await baseNextMiddleware(request, event);
       }
 
-      if (ephemeralMode) {
-        const params = Object.fromEntries(request.nextUrl.searchParams);
-        ephemeralPublishableKey = params[constants.QueryParameters.EphemeralPublishableKey];
-        ephemeralSecretKey = params[constants.QueryParameters.EphemeralSecretKey];
-      }
+      const params = Object.fromEntries(request.nextUrl.searchParams);
+      ephemeralPublishableKey = params[constants.QueryParameters.EphemeralPublishableKey];
+      ephemeralSecretKey = params[constants.QueryParameters.EphemeralSecretKey];
 
       let handlerResult: NextResponse | undefined;
 
       try {
         handlerResult = (await baseNextMiddleware(request, event)) as NextResponse;
       } catch (e: any) {
-        // And this is a clerkKeyError, return a no-op to allow the ClerkProvider to fetch the keys
         if (!isClerkKeyError(e)) {
           throw e;
         }
       }
 
-      if (ephemeralMode) {
-        // TODO: Set the cookie expiry to the same as the key
-        handlerResult?.cookies?.set(constants.Cookies.EphemeralPublishableKey, ephemeralPublishableKey || '');
-        handlerResult?.cookies?.set(constants.Cookies.EphemeralSecretKey, ephemeralSecretKey || '');
-      } else {
-        handlerResult?.cookies?.delete(constants.Cookies.EphemeralPublishableKey);
-        handlerResult?.cookies?.delete(constants.Cookies.EphemeralSecretKey);
+      if (handlerResult) {
+        handlerResult.cookies?.set(constants.Cookies.EphemeralPublishableKey, ephemeralPublishableKey || '');
+        handlerResult.cookies?.set(constants.Cookies.EphemeralSecretKey, ephemeralSecretKey || '');
       }
 
       return handlerResult;
