@@ -200,9 +200,13 @@ export const clerkMiddleware: ClerkMiddleware = withLogger('clerkMiddleware', lo
           return handlerResult;
         }
 
-        handlerResult.cookies.set(constants.Cookies.EphemeralExpiresAt, ephemeralExpiresAt || '');
-        handlerResult.cookies.set(constants.Cookies.EphemeralPublishableKey, ephemeralPublishableKey || '');
-        handlerResult.cookies.set(constants.Cookies.EphemeralSecretKey, ephemeralSecretKey || '');
+        const options = {
+          expires: Number(ephemeralExpiresAt) * 1000,
+        };
+
+        handlerResult.cookies.set(constants.Cookies.EphemeralExpiresAt, ephemeralExpiresAt || '', options);
+        handlerResult.cookies.set(constants.Cookies.EphemeralPublishableKey, ephemeralPublishableKey || '', options);
+        handlerResult.cookies.set(constants.Cookies.EphemeralSecretKey, ephemeralSecretKey || '', options);
 
         return handlerResult;
       } catch (e: any) {
