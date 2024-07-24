@@ -201,7 +201,18 @@ export const clerkMiddleware: ClerkMiddleware = withLogger('clerkMiddleware', lo
           }
         }
 
-        return await baseNextMiddleware(request, event);
+        const handlerResult = (await baseNextMiddleware(request, event)) as NextResponse;
+
+        if (ephemeralMode) {
+          // TODO: Set the cookie expiry to the same as the key
+          handlerResult.cookies.set(constants.Cookies.EphemeralPublishableKey, ephemeralPublishableKey || '');
+          handlerResult.cookies.set(constants.Cookies.EphemeralSecretKey, ephemeralSecretKey || '');
+        } else {
+          handlerResult.cookies.delete(constants.Cookies.EphemeralPublishableKey);
+          handlerResult.cookies.delete(constants.Cookies.EphemeralSecretKey);
+        }
+
+        return handlerResult;
       } catch (e: any) {
         // And this is a clerkKeyError, return a no-op to allow the ClerkProvider to fetch the keys
         if (isClerkKeyError(e)) {
