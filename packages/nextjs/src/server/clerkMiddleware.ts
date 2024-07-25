@@ -191,22 +191,24 @@ export const clerkMiddleware: ClerkMiddleware = withLogger('clerkMiddleware', lo
       ephemeralPublishableKey = params[constants.QueryParameters.EphemeralPublishableKey];
       ephemeralSecretKey = params[constants.QueryParameters.EphemeralSecretKey];
 
-      let handlerResult: NextResponse | undefined;
-
       try {
-        handlerResult = (await baseNextMiddleware(request, event)) as NextResponse;
-      } catch (e: any) {
-        if (!isClerkKeyError(e)) {
-          throw e;
+        const handlerResult = await baseNextMiddleware(request, event);
+
+        if (!(handlerResult instanceof NextResponse)) {
+          return handlerResult;
         }
-      }
 
-      if (handlerResult) {
-        handlerResult.cookies?.set(constants.Cookies.EphemeralPublishableKey, ephemeralPublishableKey || '');
-        handlerResult.cookies?.set(constants.Cookies.EphemeralSecretKey, ephemeralSecretKey || '');
-      }
+        handlerResult.cookies.set(constants.Cookies.EphemeralPublishableKey, ephemeralPublishableKey || '');
+        handlerResult.cookies.set(constants.Cookies.EphemeralSecretKey, ephemeralSecretKey || '');
 
-      return handlerResult;
+        return handlerResult;
+      } catch (e: any) {
+        // And this is a clerkKeyError, return a no-op to allow the ClerkProvider to fetch the keys
+        if (isClerkKeyError(e)) {
+          return null;
+        }
+        throw e;
+      }
     };
 
     // If we have a request and event, we're being called as a middleware directly
