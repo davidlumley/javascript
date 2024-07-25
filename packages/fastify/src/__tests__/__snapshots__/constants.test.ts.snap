@@ -7,10 +7,11 @@ exports[`constants from environment variables 1`] = `
   "Cookies": {
     "ClientUat": "__client_uat",
     "DevBrowser": "__clerk_db_jwt",
-    "Handshake": "__clerk_handshake",
-    "Session": "__session",
+    "EphemeralExpiresAt": "__clerk_ephemeral_expires_at",
     "EphemeralPublishableKey": "__clerk_ephemeral_publishable_key",
     "EphemeralSecretKey": "__clerk_ephemeral_secret_key",
+    "Handshake": "__clerk_handshake",
+    "Session": "__session",
   },
   "Headers": {
     "Accept": "accept",

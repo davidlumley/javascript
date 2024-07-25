@@ -95,6 +95,7 @@ export const clerkMiddleware: ClerkMiddleware = withLogger('clerkMiddleware', lo
   };
 
   const ephemeralMode = process.env.NODE_ENV === 'development' && (!params.publishableKey || !params.secretKey);
+  let ephemeralExpiresAt: string | undefined;
   let ephemeralPublishableKey: string | undefined;
   let ephemeralSecretKey: string | undefined;
 
@@ -188,6 +189,7 @@ export const clerkMiddleware: ClerkMiddleware = withLogger('clerkMiddleware', lo
       }
 
       const params = Object.fromEntries(request.nextUrl.searchParams);
+      ephemeralExpiresAt = params[constants.QueryParameters.EphemeralExpiresAt];
       ephemeralPublishableKey = params[constants.QueryParameters.EphemeralPublishableKey];
       ephemeralSecretKey = params[constants.QueryParameters.EphemeralSecretKey];
 
@@ -198,8 +200,13 @@ export const clerkMiddleware: ClerkMiddleware = withLogger('clerkMiddleware', lo
           return handlerResult;
         }
 
-        handlerResult.cookies.set(constants.Cookies.EphemeralPublishableKey, ephemeralPublishableKey || '');
-        handlerResult.cookies.set(constants.Cookies.EphemeralSecretKey, ephemeralSecretKey || '');
+        const options = {
+          expires: Number(ephemeralExpiresAt) * 1000,
+        };
+
+        handlerResult.cookies.set(constants.Cookies.EphemeralExpiresAt, ephemeralExpiresAt || '', options);
+        handlerResult.cookies.set(constants.Cookies.EphemeralPublishableKey, ephemeralPublishableKey || '', options);
+        handlerResult.cookies.set(constants.Cookies.EphemeralSecretKey, ephemeralSecretKey || '', options);
 
         return handlerResult;
       } catch (e: any) {

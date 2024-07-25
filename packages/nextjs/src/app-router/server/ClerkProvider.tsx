@@ -19,19 +19,22 @@ export async function ClerkProvider(
 
   if (!providerProps.publishableKey) {
     const ephemeralAccount = await fetchEphemeralAccount();
-    const params = new URLSearchParams();
+    const cookieExpiresAt = cookies().get(constants.QueryParameters.EphemeralExpiresAt)?.value;
     const cookiePublishableKey = cookies().get(constants.QueryParameters.EphemeralPublishableKey)?.value;
     const cookieSecretKey = cookies().get(constants.QueryParameters.EphemeralSecretKey)?.value;
 
-    if (!cookiePublishableKey || cookiePublishableKey !== ephemeralAccount.publishableKey) {
-      params.set(constants.QueryParameters.EphemeralPublishableKey, ephemeralAccount.publishableKey);
-    }
+    const stale =
+      cookieExpiresAt !== String(ephemeralAccount.expiresAt) ||
+      cookiePublishableKey !== ephemeralAccount.publishableKey ||
+      cookieSecretKey !== ephemeralAccount.secretKey;
 
-    if (!cookieSecretKey || cookieSecretKey !== ephemeralAccount.secretKey) {
-      params.set(constants.QueryParameters.EphemeralSecretKey, ephemeralAccount.secretKey);
-    }
+    if (stale) {
+      const params = new URLSearchParams({
+        [constants.QueryParameters.EphemeralExpiresAt]: String(ephemeralAccount.expiresAt),
+        [constants.QueryParameters.EphemeralPublishableKey]: ephemeralAccount.publishableKey,
+        [constants.QueryParameters.EphemeralSecretKey]: ephemeralAccount.secretKey,
+      });
 
-    if (params.size === 2) {
       redirect(`?${params}`);
     }
 
