@@ -183,34 +183,23 @@ export const clerkMiddleware: ClerkMiddleware = withLogger('clerkMiddleware', lo
     };
 
     const nextMiddleware: NextMiddleware = async (request, event) => {
-      if (process.env.NODE_ENV !== 'development') {
+      if (!ephemeralMode) {
         return await baseNextMiddleware(request, event);
       }
 
+      const params = Object.fromEntries(request.nextUrl.searchParams);
+      ephemeralPublishableKey = params[constants.QueryParameters.EphemeralPublishableKey];
+      ephemeralSecretKey = params[constants.QueryParameters.EphemeralSecretKey];
+
       try {
-        if (ephemeralMode) {
-          const params = Object.fromEntries(request.nextUrl.searchParams);
-          const queryEphemeralPublishableKey = params[constants.QueryParameters.EphemeralPublishableKey];
-          const queryEphemeralSecretKey = params[constants.QueryParameters.EphemeralSecretKey];
+        const handlerResult = await baseNextMiddleware(request, event);
 
-          if (queryEphemeralPublishableKey && ephemeralPublishableKey !== queryEphemeralPublishableKey) {
-            ephemeralPublishableKey = queryEphemeralPublishableKey;
-          }
-          if (queryEphemeralSecretKey && ephemeralSecretKey !== queryEphemeralSecretKey) {
-            ephemeralSecretKey = queryEphemeralSecretKey;
-          }
+        if (!(handlerResult instanceof NextResponse)) {
+          return handlerResult;
         }
 
-        const handlerResult = (await baseNextMiddleware(request, event)) as NextResponse;
-
-        if (ephemeralMode) {
-          // TODO: Set the cookie expiry to the same as the key
-          handlerResult.cookies.set(constants.Cookies.EphemeralPublishableKey, ephemeralPublishableKey || '');
-          handlerResult.cookies.set(constants.Cookies.EphemeralSecretKey, ephemeralSecretKey || '');
-        } else {
-          handlerResult.cookies.delete(constants.Cookies.EphemeralPublishableKey);
-          handlerResult.cookies.delete(constants.Cookies.EphemeralSecretKey);
-        }
+        handlerResult.cookies.set(constants.Cookies.EphemeralPublishableKey, ephemeralPublishableKey || '');
+        handlerResult.cookies.set(constants.Cookies.EphemeralSecretKey, ephemeralSecretKey || '');
 
         return handlerResult;
       } catch (e: any) {
