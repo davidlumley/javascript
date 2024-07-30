@@ -99,6 +99,22 @@ export const clerkMiddleware: ClerkMiddleware = withLogger('clerkMiddleware', lo
   let ephemeralPublishableKey: string | undefined;
   let ephemeralSecretKey: string | undefined;
 
+  const setEphemeralKeys = (params: Record<string, string>) => {
+    ephemeralExpiresAt = params[constants.QueryParameters.EphemeralExpiresAt];
+    ephemeralPublishableKey = params[constants.QueryParameters.EphemeralPublishableKey];
+    ephemeralSecretKey = params[constants.QueryParameters.EphemeralSecretKey];
+  };
+
+  const setEphemeralCookies = (response: NextResponse) => {
+    const options = {
+      expires: Number(ephemeralExpiresAt) * 1000,
+    };
+
+    response.cookies.set(constants.Cookies.EphemeralExpiresAt, ephemeralExpiresAt || '', options);
+    response.cookies.set(constants.Cookies.EphemeralPublishableKey, ephemeralPublishableKey || '', options);
+    response.cookies.set(constants.Cookies.EphemeralSecretKey, ephemeralSecretKey || '', options);
+  };
+
   return clerkMiddlewareRequestDataStore.run(runOptions, () => {
     clerkClient().telemetry.record(
       eventMethodCalled('clerkMiddleware', {
@@ -189,24 +205,23 @@ export const clerkMiddleware: ClerkMiddleware = withLogger('clerkMiddleware', lo
       }
 
       const params = Object.fromEntries(request.nextUrl.searchParams);
-      ephemeralExpiresAt = params[constants.QueryParameters.EphemeralExpiresAt];
-      ephemeralPublishableKey = params[constants.QueryParameters.EphemeralPublishableKey];
-      ephemeralSecretKey = params[constants.QueryParameters.EphemeralSecretKey];
+      const hasEphemeralParams = !!params[constants.QueryParameters.EphemeralExpiresAt];
+
+      if (hasEphemeralParams) {
+        setEphemeralKeys(params);
+
+        const response = new NextResponse(null, {
+          status: 307,
+          headers: { location: `${request.nextUrl.protocol}//${request.nextUrl.host}` },
+        });
+
+        setEphemeralCookies(response);
+
+        return response;
+      }
 
       try {
         const handlerResult = await baseNextMiddleware(request, event);
-
-        if (!(handlerResult instanceof NextResponse)) {
-          return handlerResult;
-        }
-
-        const options = {
-          expires: Number(ephemeralExpiresAt) * 1000,
-        };
-
-        handlerResult.cookies.set(constants.Cookies.EphemeralExpiresAt, ephemeralExpiresAt || '', options);
-        handlerResult.cookies.set(constants.Cookies.EphemeralPublishableKey, ephemeralPublishableKey || '', options);
-        handlerResult.cookies.set(constants.Cookies.EphemeralSecretKey, ephemeralSecretKey || '', options);
 
         return handlerResult;
       } catch (e: any) {
