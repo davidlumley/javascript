@@ -50,6 +50,12 @@ type ClerkMiddlewareHandler = (
 
 export type ClerkMiddlewareOptions = AuthenticateRequestOptions & { debug?: boolean };
 
+type EphemeralQueryParams = {
+  ephemeralExpiresAt: string;
+  ephemeralPublishableKey: string;
+  ephemeralSecretKey: string;
+};
+
 /**
  * Middleware for Next.js that handles authentication and authorization with Clerk.
  * For more details, please refer to the docs: https://clerk.com/docs/references/nextjs/clerk-middleware
@@ -98,22 +104,6 @@ export const clerkMiddleware: ClerkMiddleware = withLogger('clerkMiddleware', lo
   let ephemeralExpiresAt: string | undefined;
   let ephemeralPublishableKey: string | undefined;
   let ephemeralSecretKey: string | undefined;
-
-  const setEphemeralKeys = (params: Record<string, string>) => {
-    ephemeralExpiresAt = params[constants.QueryParameters.EphemeralExpiresAt];
-    ephemeralPublishableKey = params[constants.QueryParameters.EphemeralPublishableKey];
-    ephemeralSecretKey = params[constants.QueryParameters.EphemeralSecretKey];
-  };
-
-  const setEphemeralCookies = (response: NextResponse) => {
-    const options = {
-      expires: Number(ephemeralExpiresAt) * 1000,
-    };
-
-    response.cookies.set(constants.Cookies.EphemeralExpiresAt, ephemeralExpiresAt || '', options);
-    response.cookies.set(constants.Cookies.EphemeralPublishableKey, ephemeralPublishableKey || '', options);
-    response.cookies.set(constants.Cookies.EphemeralSecretKey, ephemeralSecretKey || '', options);
-  };
 
   return clerkMiddlewareRequestDataStore.run(runOptions, () => {
     clerkClient().telemetry.record(
@@ -204,18 +194,25 @@ export const clerkMiddleware: ClerkMiddleware = withLogger('clerkMiddleware', lo
         return await baseNextMiddleware(request, event);
       }
 
-      const params = Object.fromEntries(request.nextUrl.searchParams);
-      const hasEphemeralParams = !!params[constants.QueryParameters.EphemeralExpiresAt];
+      const ephemeral = ephemeralQueryParams();
 
-      if (hasEphemeralParams) {
-        setEphemeralKeys(params);
+      if (ephemeral) {
+        ephemeralExpiresAt = ephemeral.ephemeralExpiresAt;
+        ephemeralPublishableKey = ephemeral.ephemeralPublishableKey;
+        ephemeralSecretKey = ephemeral.ephemeralSecretKey;
 
         const response = new NextResponse(null, {
           status: 307,
           headers: { location: `${request.nextUrl.protocol}//${request.nextUrl.host}` },
         });
 
-        setEphemeralCookies(response);
+        const options = {
+          expires: Number(ephemeralExpiresAt) * 1000,
+        };
+
+        response.cookies.set(constants.Cookies.EphemeralExpiresAt, ephemeralExpiresAt, options);
+        response.cookies.set(constants.Cookies.EphemeralPublishableKey, ephemeralPublishableKey, options);
+        response.cookies.set(constants.Cookies.EphemeralSecretKey, ephemeralSecretKey, options);
 
         return response;
       }
@@ -230,6 +227,26 @@ export const clerkMiddleware: ClerkMiddleware = withLogger('clerkMiddleware', lo
           return null;
         }
         throw e;
+      }
+
+      function ephemeralQueryParams(): EphemeralQueryParams | undefined {
+        const params = Object.fromEntries(request.nextUrl.searchParams);
+
+        const ephemeralParams = {
+          ephemeralExpiresAt: params[constants.QueryParameters.EphemeralExpiresAt],
+          ephemeralPublishableKey: params[constants.QueryParameters.EphemeralPublishableKey],
+          ephemeralSecretKey: params[constants.QueryParameters.EphemeralSecretKey],
+        };
+
+        const maybeEphemeral = Object.fromEntries(
+          Object.entries(ephemeralParams).filter(([_, v]) => v != null),
+        ) as Partial<EphemeralQueryParams>;
+
+        if (Object.keys(maybeEphemeral).length === Object.keys(ephemeralParams).length) {
+          return maybeEphemeral as EphemeralQueryParams;
+        } else {
+          return undefined;
+        }
       }
     };
 
