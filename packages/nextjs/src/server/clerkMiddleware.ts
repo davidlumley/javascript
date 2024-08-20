@@ -50,10 +50,10 @@ type ClerkMiddlewareHandler = (
 
 export type ClerkMiddlewareOptions = AuthenticateRequestOptions & { debug?: boolean };
 
-type EphemeralQueryParams = {
-  ephemeralExpiresAt: string;
-  ephemeralPublishableKey: string;
-  ephemeralSecretKey: string;
+type Ephemeral = {
+  expiresAt: string;
+  publishableKey: string;
+  secretKey: string;
 };
 
 /**
@@ -101,9 +101,7 @@ export const clerkMiddleware: ClerkMiddleware = withLogger('clerkMiddleware', lo
   };
 
   const ephemeralMode = process.env.NODE_ENV === 'development' && (!params.publishableKey || !params.secretKey);
-  let ephemeralExpiresAt: string | undefined;
-  let ephemeralPublishableKey: string | undefined;
-  let ephemeralSecretKey: string | undefined;
+  let ephemeral: Ephemeral | undefined;
 
   return clerkMiddlewareRequestDataStore.run(runOptions, () => {
     clerkClient().telemetry.record(
@@ -115,10 +113,11 @@ export const clerkMiddleware: ClerkMiddleware = withLogger('clerkMiddleware', lo
     );
 
     const baseNextMiddleware: NextMiddleware = async (request, event) => {
-      const publishableKey = assertKey(params.publishableKey || PUBLISHABLE_KEY || ephemeralPublishableKey || '', () =>
-        errorThrower.throwMissingPublishableKeyError(),
+      const publishableKey = assertKey(
+        params.publishableKey || PUBLISHABLE_KEY || ephemeral?.publishableKey || '',
+        () => errorThrower.throwMissingPublishableKeyError(),
       );
-      const secretKey = assertKey(params.secretKey || SECRET_KEY || ephemeralSecretKey || '', () =>
+      const secretKey = assertKey(params.secretKey || SECRET_KEY || ephemeral?.secretKey || '', () =>
         errorThrower.throwMissingSecretKeyError(),
       );
 
@@ -194,12 +193,10 @@ export const clerkMiddleware: ClerkMiddleware = withLogger('clerkMiddleware', lo
         return await baseNextMiddleware(request, event);
       }
 
-      const ephemeral = ephemeralQueryParams();
+      const maybeEphemeral = ephemeralQueryParams();
 
-      if (ephemeral) {
-        ephemeralExpiresAt = ephemeral.ephemeralExpiresAt;
-        ephemeralPublishableKey = ephemeral.ephemeralPublishableKey;
-        ephemeralSecretKey = ephemeral.ephemeralSecretKey;
+      if (maybeEphemeral) {
+        ephemeral = maybeEphemeral;
 
         const response = new NextResponse(null, {
           status: 307,
@@ -207,12 +204,12 @@ export const clerkMiddleware: ClerkMiddleware = withLogger('clerkMiddleware', lo
         });
 
         const options = {
-          expires: Number(ephemeralExpiresAt) * 1000,
+          expires: Number(ephemeral.expiresAt) * 1000,
         };
 
-        response.cookies.set(constants.Cookies.EphemeralExpiresAt, ephemeralExpiresAt, options);
-        response.cookies.set(constants.Cookies.EphemeralPublishableKey, ephemeralPublishableKey, options);
-        response.cookies.set(constants.Cookies.EphemeralSecretKey, ephemeralSecretKey, options);
+        response.cookies.set(constants.Cookies.EphemeralExpiresAt, ephemeral.expiresAt, options);
+        response.cookies.set(constants.Cookies.EphemeralPublishableKey, ephemeral.publishableKey, options);
+        response.cookies.set(constants.Cookies.EphemeralSecretKey, ephemeral.secretKey, options);
 
         return response;
       }
@@ -229,21 +226,21 @@ export const clerkMiddleware: ClerkMiddleware = withLogger('clerkMiddleware', lo
         throw e;
       }
 
-      function ephemeralQueryParams(): EphemeralQueryParams | undefined {
+      function ephemeralQueryParams(): Ephemeral | undefined {
         const params = Object.fromEntries(request.nextUrl.searchParams);
 
         const ephemeralParams = {
-          ephemeralExpiresAt: params[constants.QueryParameters.EphemeralExpiresAt],
-          ephemeralPublishableKey: params[constants.QueryParameters.EphemeralPublishableKey],
-          ephemeralSecretKey: params[constants.QueryParameters.EphemeralSecretKey],
+          expiresAt: params[constants.QueryParameters.EphemeralExpiresAt],
+          publishableKey: params[constants.QueryParameters.EphemeralPublishableKey],
+          secretKey: params[constants.QueryParameters.EphemeralSecretKey],
         };
 
         const maybeEphemeral = Object.fromEntries(
           Object.entries(ephemeralParams).filter(([_, v]) => v != null),
-        ) as Partial<EphemeralQueryParams>;
+        ) as Partial<Ephemeral>;
 
         if (Object.keys(maybeEphemeral).length === Object.keys(ephemeralParams).length) {
-          return maybeEphemeral as EphemeralQueryParams;
+          return maybeEphemeral as Ephemeral;
         } else {
           return undefined;
         }
