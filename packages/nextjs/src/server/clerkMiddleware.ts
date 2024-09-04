@@ -2,7 +2,13 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 
 import type { AuthObject } from '@clerk/backend';
 import type { AuthenticateRequestOptions, ClerkRequest, RedirectFun, RequestState } from '@clerk/backend/internal';
-import { AuthStatus, constants, createClerkRequest, createRedirect } from '@clerk/backend/internal';
+import {
+  AuthStatus,
+  constants,
+  createClerkRequest,
+  createRedirect,
+  EPHEMERAL_MODE_AVAILABLE,
+} from '@clerk/backend/internal';
 import { isClerkKeyError } from '@clerk/shared';
 import { eventMethodCalled } from '@clerk/shared/telemetry';
 import type { NextMiddleware } from 'next/server';
@@ -93,7 +99,7 @@ export const clerkMiddleware: ClerkMiddleware = (...args: unknown[]): any => {
     signUpUrl,
   };
 
-  const ephemeralMode = process.env.NODE_ENV === 'development' && (!params.publishableKey || !params.secretKey);
+  const ephemeralMode = EPHEMERAL_MODE_AVAILABLE && (!params.publishableKey || !params.secretKey);
   let ephemeral: Ephemeral | undefined;
 
   return clerkMiddlewareRequestDataStore.run(runOptions, () => {
@@ -124,7 +130,6 @@ export const clerkMiddleware: ClerkMiddleware = (...args: unknown[]): any => {
         secretKey,
       };
 
->>>>>>> 3e0366c96 (feat(nextjs): add accountless signup to Next.js apps using the app router)
       const clerkRequest = createClerkRequest(request);
       logger.debug('options', options);
       logger.debug('url', () => clerkRequest.toJSON());
